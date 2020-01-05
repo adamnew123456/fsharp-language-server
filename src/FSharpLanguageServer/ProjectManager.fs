@@ -272,18 +272,8 @@ type ProjectManager(checker: FSharpChecker) =
                     [|
                         // Dotnet framework should be specified explicitly
                         yield "--noframework"
-                        // Reference output of other projects
-                        for r in cracked.projectReferences do 
-                            let options = cache.Get(r, analyzeLater)
-                            yield "-r:" + options.resolved.Value.target.FullName
-                        // Reference target .dll for .csproj proejcts
-                        for r in cracked.otherProjectReferences do 
-                            yield "-r:" + r.FullName
-                        // Reference packages
-                        for r in cracked.packageReferences do 
-                            yield "-r:" + r.FullName
-                        // Direct dll references
-                        for r in cracked.directReferences do 
+                        // All references from other projects/NuGet/direct refs etc.
+                        for r in cracked.assemblyReferences do 
                             yield "-r:" + r.FullName
                     |]
                 ProjectFileName = fsproj.FullName 
