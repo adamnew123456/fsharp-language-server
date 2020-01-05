@@ -7,12 +7,6 @@ open System
 open System.IO
 open System.Text.RegularExpressions
 open System.Diagnostics
-open Microsoft.Build
-open Microsoft.Build.Evaluation
-open Microsoft.Build.Utilities
-open Microsoft.Build.Framework
-open Microsoft.Build.Logging
-open Buildalyzer
 open NUnit.Framework
 
 [<SetUp>]
@@ -30,11 +24,8 @@ let ``crack a project file``() =
     let cracked = ProjectCracker.crack(fsproj)
     // Direct project reference
     let projectNames = [for f in cracked.projectReferences do yield f.Name]
-    if not(List.contains "DependsOn.fsproj" projectNames) then
-        Assert.Fail(sprintf "No DependsOn.fsproj in %A" cracked.projectReferences)
-    // Transitive dependency
-    if not(List.contains "IndirectDep.fsproj" projectNames) then
-        Assert.Fail(sprintf "No IndirectDep.fsproj in %A" cracked.projectReferences)
+    CollectionAssert.Contains(projectNames, "DependsOn.fsproj")
+    CollectionAssert.Contains(projectNames, "IndirectDep.fsproj")
     // Output dll
     Assert.AreEqual("MainProject.dll", cracked.target.Name)
 
@@ -42,31 +33,31 @@ let ``crack a project file``() =
 let ``crack a project file with case insensitive package references`` () =
     let fsproj = Path.Combine [|projectRoot.FullName; "sample"; "HasPackageReference"; "HasPackageReference.fsproj" |] |> FileInfo
     let cracked = ProjectCracker.crack(fsproj)
-    CollectionAssert.Contains([for f in cracked.packageReferences do yield f.Name], "Logary.dll")
+    CollectionAssert.Contains([for f in cracked.assemblyReferences do yield f.Name], "Logary.dll")
 
 [<Test>]
 let ``find compile sources``() = 
     let fsproj = Path.Combine [|projectRoot.FullName; "sample"; "IndirectDep"; "IndirectDep.fsproj"|] |> FileInfo 
     let cracked = ProjectCracker.crack(fsproj)
-    CollectionAssert.AreEquivalent(["IndirectLibrary.fs"], [for f in cracked.sources do yield f.Name])
+    CollectionAssert.Contains([for f in cracked.sources do yield f.Name], "IndirectLibrary.fs")
 
 [<Test>]
 let ``find reference includes``() = 
     let fsproj = Path.Combine [|projectRoot.FullName; "sample"; "HasLocalDll"; "HasLocalDll.fsproj"|] |> FileInfo 
     let cracked = ProjectCracker.crack(fsproj)
-    CollectionAssert.AreEquivalent(["IndirectDep.dll"], [for f in cracked.directReferences do yield f.Name])
+    CollectionAssert.Contains([for f in cracked.assemblyReferences do yield f.Name], "IndirectDep.dll")
 
 [<Test>]
 let ``find CSharp reference``() = 
     let fsproj = Path.Combine [|projectRoot.FullName; "sample"; "ReferenceCSharp"; "ReferenceCSharp.fsproj"|] |> FileInfo 
     let cracked = ProjectCracker.crack(fsproj)
-    CollectionAssert.AreEquivalent(["CSharpProject.dll"], [for f in cracked.otherProjectReferences do yield f.Name])
+    CollectionAssert.Contains([for f in cracked.assemblyReferences do yield f.Name], "CSharpProject.dll")
 
 [<Test>]
 let ``find CSharp reference with modified AssemblyName``() = 
     let fsproj = Path.Combine [|projectRoot.FullName; "sample"; "ReferenceCSharp.AssemblyName"; "ReferenceCSharp.AssemblyName.fsproj"|] |> FileInfo 
     let cracked = ProjectCracker.crack(fsproj)
-    CollectionAssert.AreEquivalent(["CSharpProject.AssemblyName.Modified.dll"], [for f in cracked.otherProjectReferences do yield f.Name])
+    CollectionAssert.Contains([for f in cracked.assemblyReferences do yield f.Name], "CSharpProject.AssemblyName.Modified.dll")
 
 [<Test>]
 let ``resolve template params``() = 
@@ -122,14 +113,11 @@ let msbuild(fsproj: FileInfo): string list =
             references.Clear()
         if line.Trim().StartsWith("-r:") then 
             references.Add(line.Trim().Substring("-r:".Length))
-    // Filter out project-to-project references, these are handled separately by ProjectCracker
-    [ for r in references do 
-        if not(r.Contains("bin/Debug/netcoreapp2.0")) then 
-            yield r ]
+    List.ofSeq(references)
     
 let cracker(fsproj: FileInfo): string list = 
     let cracked = ProjectCracker.crack(fsproj)
-    [ for f in cracked.packageReferences do 
+    [ for f in cracked.assemblyReferences do 
         yield f.FullName ]
         
 [<Test>]
@@ -157,5 +145,11 @@ let ``build unbuilt project``() =
     let fsproj = Path.Combine [|projectRoot.FullName; "sample"; "NotBuilt"; "NotBuilt.fsproj"|] |> FileInfo 
     let cracked = ProjectCracker.crack(fsproj)
     if cracked.error.IsSome then Assert.Fail(cracked.error.Value)
-    CollectionAssert.AreEquivalent(["NotBuilt.fs"], [for f in cracked.sources do yield f.Name])
-    CollectionAssert.IsNotEmpty(cracked.packageReferences)
+    CollectionAssert.Contains([for f in cracked.sources do yield f.Name], "NotBuilt.fs")
+    CollectionAssert.IsNotEmpty(cracked.assemblyReferences)
+
+[<Test>]
+let ``find implicit references with netcoreapp3``() =
+    let fsproj = Path.Combine [|projectRoot.FullName; "sample"; "NetCoreApp3"; "NetCoreApp3.fsproj"|] |> FileInfo
+    let cracked = ProjectCracker.crack(fsproj)
+    CollectionAssert.Contains([for f in cracked.assemblyReferences do yield f.Name], "System.Core.dll")
