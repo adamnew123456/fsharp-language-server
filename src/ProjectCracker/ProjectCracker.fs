@@ -87,7 +87,10 @@ let processFscArgs(args: string list) =
                 asmReferences,
                 sources)
 
-    List.fold processArg ("", [], []) args
+    let (target, asmReferences, sourceFiles) = 
+        List.fold processArg ("", [], []) args
+
+    (target, List.rev asmReferences, List.rev sourceFiles)
 
 // Recursively gets the project references for the given .fsproj
 let transitiveProjectReferences(fsproj: string): Result<string list, string> =
@@ -120,6 +123,9 @@ let transitiveProjectReferences(fsproj: string): Result<string list, string> =
             match singleReferences project with
             | Result.Ok references -> toScan <- Set.union toScan references
             | Result.Error message -> error <- Some message
+
+    // Remove the self-reference we created during the first iteration
+    scanned <- Set.remove fsproj scanned
 
     match error with
     | None -> Result.Ok (List.ofSeq scanned)
