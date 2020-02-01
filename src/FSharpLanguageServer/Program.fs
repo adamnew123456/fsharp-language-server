@@ -15,7 +15,11 @@ open Conversions
 
 module Ast = FSharp.Compiler.Ast
 
-let private TODO() = raise (Exception "TODO")
+let private TODO(output: 'a): Async<'a> = 
+    async {
+        dprintfn "TODO occurred at:\n%s" Environment.StackTrace
+        return output
+    }
 
 /// Look for a method call like foo.MyMethod() before the cursor
 /// (exposed for testing)
@@ -565,8 +569,8 @@ type Server(client: ILanguageClient) =
                 docs.Change(p)
                 backgroundCheck.CheckLater(file)
             }
-        member this.WillSaveTextDocument(p: WillSaveTextDocumentParams): Async<unit> = TODO()
-        member this.WillSaveWaitUntilTextDocument(p: WillSaveTextDocumentParams): Async<TextEdit list> = TODO()
+        member this.WillSaveTextDocument(p: WillSaveTextDocumentParams): Async<unit> = TODO(())
+        member this.WillSaveWaitUntilTextDocument(p: WillSaveTextDocumentParams): Async<TextEdit list> = TODO([])
         member this.DidSaveTextDocument(p: DidSaveTextDocumentParams): Async<unit> = 
             async {
                 let targetFile = FileInfo(p.textDocument.uri.LocalPath)
@@ -717,7 +721,7 @@ type Server(client: ILanguageClient) =
                     let! uses = findAllSymbolUses(s.Symbol)
                     return List.map useLocation uses
             }
-        member this.DocumentHighlight(p: TextDocumentPositionParams): Async<DocumentHighlight list> = TODO()
+        member this.DocumentHighlight(p: TextDocumentPositionParams): Async<DocumentHighlight list> = TODO([])
         member this.DocumentSymbols(p: DocumentSymbolParams): Async<SymbolInformation list> =
             async {
                 let file = FileInfo(p.textDocument.uri.LocalPath)
@@ -756,7 +760,7 @@ type Server(client: ILanguageClient) =
                                     dprintfn "Error parsing %s: %s" sourceFile.Name e.Message
                 return List.ofSeq(all)
             }
-        member this.CodeActions(p: CodeActionParams): Async<Command list> = TODO()
+        member this.CodeActions(p: CodeActionParams): Async<Command list> = TODO([])
         member this.CodeLens(p: CodeLensParams): Async<List<CodeLens>> = 
             async {
                 let file = FileInfo(p.textDocument.uri.LocalPath)
@@ -816,11 +820,17 @@ type Server(client: ILanguageClient) =
                         return p
                 else return p
             }
-        member this.DocumentLink(p: DocumentLinkParams): Async<DocumentLink list> = TODO()
-        member this.ResolveDocumentLink(p: DocumentLink): Async<DocumentLink> = TODO()
-        member this.DocumentFormatting(p: DocumentFormattingParams): Async<TextEdit list> = TODO()
-        member this.DocumentRangeFormatting(p: DocumentRangeFormattingParams): Async<TextEdit list> = TODO()
-        member this.DocumentOnTypeFormatting(p: DocumentOnTypeFormattingParams): Async<TextEdit list> = TODO()
+        member this.DocumentLink(p: DocumentLinkParams): Async<DocumentLink list> = TODO([])
+        member this.ResolveDocumentLink(p: DocumentLink): Async<DocumentLink> = TODO({
+            range={
+                start={line=0; character=0}
+                ``end``={line=0; character=0}
+            }
+            target=Some(Uri("file://nonexistent.txt"))
+        })
+        member this.DocumentFormatting(p: DocumentFormattingParams): Async<TextEdit list> = TODO([])
+        member this.DocumentRangeFormatting(p: DocumentRangeFormattingParams): Async<TextEdit list> = TODO([])
+        member this.DocumentOnTypeFormatting(p: DocumentOnTypeFormattingParams): Async<TextEdit list> = TODO([])
         member this.Rename(p: RenameParams): Async<WorkspaceEdit> =
             async {
                 let! maybeSymbol = symbolAt(p.textDocument, p.position)
@@ -834,7 +844,7 @@ type Server(client: ILanguageClient) =
                     let renames = [for fileName, uses in byFile do yield renameTo(p.newName, FileInfo(fileName), uses)]
                     return {documentChanges=List.ofSeq(renames)}
             }
-        member this.ExecuteCommand(p: ExecuteCommandParams): Async<unit> = TODO()
+        member this.ExecuteCommand(p: ExecuteCommandParams): Async<unit> = TODO(())
         member this.DidChangeWorkspaceFolders(p: DidChangeWorkspaceFoldersParams): Async<unit> = 
             async {
                 for root in p.event.added do 
